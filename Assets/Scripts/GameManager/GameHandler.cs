@@ -60,20 +60,52 @@ public class GameHandler : NetworkBehaviour
         // State machine handles game flow now
     }
     
+    
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_SendUserInfo(NetworkString<_16> username, RpcInfo info = default)
     {
         PlayerRef player = info.Source;
-    
+
         if (!_playerUsernames.ContainsKey(player))
         {
             _playerUsernames.Add(player, username);
             Debug.Log($"[GameHandler] Player {player.PlayerId} set username: {username}");
-        
-            // Broadcast to all clients
+
+            // Broadcast join to all
             RPC_BroadcastPlayerJoined(player, username);
+
+            // Now sync the full list of usernames to everyone
+            var players = new List<PlayerRef>(_playerUsernames.Keys).ToArray();
+            var usernames = new List<NetworkString<_16>>(_playerUsernames.Values).ToArray();
+            RPC_SyncAllUsernames(players, usernames);
         }
     }
+
+    
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void RPC_SyncAllUsernames(PlayerRef[] players, NetworkString<_16>[] usernames)
+    {
+        _playerUsernames.Clear();
+
+        int len = Mathf.Min(players.Length, usernames.Length);
+        for (int i = 0; i < len; i++)
+        {
+            _playerUsernames[players[i]] = usernames[i];
+        }
+
+        Debug.Log($"[GameHandler] Synced {_playerUsernames.Count} usernames to all clients.");
+        
+        // Extra debug per client
+        if (Runner != null && Runner.LocalPlayer.IsRealPlayer)
+        {
+            Debug.Log($"[Client {Runner.LocalPlayer.PlayerId}] Received username sync:");
+            foreach (var entry in _playerUsernames)
+            {
+                Debug.Log($"   Player {entry.Key.PlayerId}: {entry.Value}");
+            }
+        }
+    }
+    
     
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     private void RPC_BroadcastPlayerJoined(PlayerRef player, NetworkString<_16> username)
@@ -116,7 +148,6 @@ public class GameHandler : NetworkBehaviour
             Selection = selection
         });
     }
-
 
     /// <summary>
     /// Public method for UI to call when player makes a selection
