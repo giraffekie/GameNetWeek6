@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Fusion;
 using Fusion.Sockets;
+using GameManager;
 using GNW2.Input;
 using GNW2.Events;
 using TMPro;
@@ -30,10 +31,6 @@ namespace GNW2.GameManager
         [SerializeField] private NetworkPrefabRef _playerPrefab;
         [SerializeField] private bool _autoStartServer = false;
 
-        [Header("UI References")]
-        [SerializeField] private Button _button;
-        [SerializeField] private TMP_InputField _input;
-
         // Dictionary tracking all active players in the session
         private Dictionary<PlayerRef, NetworkObject> _spawnedPlayers = new Dictionary<PlayerRef, NetworkObject>();
 
@@ -44,12 +41,15 @@ namespace GNW2.GameManager
         /// Public accessor for active players
         /// </summary>
         public Dictionary<PlayerRef, NetworkObject> activePlayers => _spawnedPlayers;
+        [SerializeField] private TMP_InputField _loginInput;
 
         /// <summary>
         /// Initialize singleton instance and setup UI
         /// </summary>
         private void Awake()
         {
+            this.enabled = true;
+            
             // Singleton pattern
             if (Instance == null)
             {
@@ -65,23 +65,18 @@ namespace GNW2.GameManager
             if (_autoStartServer && _currentGameMode == GameMode.Server)
             {
                 StartGame(_currentGameMode);
-                // Hide UI when auto-starting
-                if (_button != null && _button.transform.parent != null)
-                {
-                    _button.transform.parent.gameObject.SetActive(false);
-                }
+            }
+        }
+
+        public void CallStartGame()
+        {
+            if (_runner == null) // Only start if not already running
+            {
+                StartGame(_currentGameMode);
             }
             else
             {
-                // Setup start game button for manual start
-                if (_button != null)
-                {
-                    _button.onClick.AddListener(() =>
-                    {
-                        StartGame(_currentGameMode);
-                        _button.transform.parent.gameObject.SetActive(false);
-                    });
-                }
+                Debug.LogWarning("Game already started!");
             }
         }
 
@@ -119,16 +114,9 @@ namespace GNW2.GameManager
 
                 Debug.Log($"[GameManager] Player {player.PlayerId} joined. Total players: {_spawnedPlayers.Count}");
             }
-
-            // Both host and client send their username to server
-            if (runner.LocalPlayer == player && _input != null && !string.IsNullOrEmpty(_input.text))
-            {
-                // Use coroutine to wait for GameHandler to be ready
-                StartCoroutine(SendUsernameWhenReady(_input.text));
-            }
         }
 
-        private System.Collections.IEnumerator SendUsernameWhenReady(string username)
+        public System.Collections.IEnumerator SendUsernameWhenReady(string username)
         {
             // Wait until GameHandler instance is available
             while (GameHandler.Instance == null)
