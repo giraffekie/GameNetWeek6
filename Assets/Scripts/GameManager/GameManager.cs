@@ -142,6 +142,7 @@ namespace GNW2.GameManager
             GameHandler.Instance.RPC_SendUserInfo(username);
             Debug.Log($"[GameManager] Sent username for player: {username}");
         }
+        
         /// <summary>
         /// Called when a player leaves the session
         /// Despawns their player object and publishes PlayerLeftEvent

@@ -193,7 +193,9 @@ namespace GNW2.GameManager
 
         public void Update()
         {
-            if (GameManager.Instance.activePlayers.Count >= 2)
+            var _gameHandler = GameHandler.Instance;
+            
+            if (GameManager.Instance.activePlayers.Count >= 2 && _gameHandler != null && _gameHandler.AllUsernamesAssigned())
             {
                 // Publish game started event
                 EventBus.Publish(new GameStartedEvent
@@ -226,7 +228,26 @@ namespace GNW2.GameManager
 
             EventBus.Publish(new RoundStartedEvent { RoundNumber = _fsm.CurrentRound });
 
-            // Move to waiting for selections immediately
+            // Assign opponents only if 2 players are active
+            var activePlayers = GameManager.Instance.activePlayers;
+            if (activePlayers.Count == 2 && GameHandler.Instance != null)
+            {
+                var playerList = new List<PlayerRef>(activePlayers.Keys);
+                var player1 = playerList[0];
+                var player2 = playerList[1];
+
+                // Get usernames
+                string name1 = GameHandler.Instance.GetUsername(player1);
+                string name2 = GameHandler.Instance.GetUsername(player2);
+
+                // Create arrays for RPC
+                PlayerRef[] players = { player1, player2 };
+                NetworkString<_16>[] opponentNames = { name2, name1 };
+
+                GameHandler.Instance.RPC_AssignOpponents(players, opponentNames);
+            }
+
+            // Continue to selection phase
             _fsm.TransitionToState(GameState.WaitingForSelections);
         }
 

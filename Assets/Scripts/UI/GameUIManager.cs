@@ -25,6 +25,7 @@ namespace GNW2.UI
         [Header("Game Info UI")]
         [SerializeField] private TMPro.TextMeshProUGUI roundNumberText;
         [SerializeField] private TMPro.TextMeshProUGUI playerCountText;
+        [SerializeField] private TMPro.TextMeshProUGUI opponentNameText;
 
         [Header("Root UI Container")]
         [SerializeField] private GameObject gameUIRoot;
@@ -50,6 +51,7 @@ namespace GNW2.UI
             EventBus.Subscribe<PlayerLeftEvent>(OnPlayerLeft);
             EventBus.Subscribe<NetworkConnectedEvent>(OnNetworkConnected);
             EventBus.Subscribe<NetworkDisconnectedEvent>(OnNetworkDisconnected);
+            EventBus.Subscribe<OpponentAssignedEvent>(OnOpponentAssigned);
 
             // Setup button listeners
             if (rockButton != null)
@@ -73,6 +75,7 @@ namespace GNW2.UI
             EventBus.Unsubscribe<PlayerLeftEvent>(OnPlayerLeft);
             EventBus.Unsubscribe<NetworkConnectedEvent>(OnNetworkConnected);
             EventBus.Unsubscribe<NetworkDisconnectedEvent>(OnNetworkDisconnected);
+            EventBus.Unsubscribe<OpponentAssignedEvent>(OnOpponentAssigned);
 
             // Remove button listeners
             if (rockButton != null)
@@ -81,6 +84,22 @@ namespace GNW2.UI
                 paperButton.onClick.RemoveAllListeners();
             if (scissorButton != null)
                 scissorButton.onClick.RemoveAllListeners();
+        }
+        
+        private void OnOpponentAssigned(OpponentAssignedEvent evt)
+        {
+            var runner = NetworkRunner.GetRunnerForGameObject(gameObject);
+            if (runner == null) return;
+
+            // Only update UI for the local player
+            if (evt.Player == runner.LocalPlayer)
+            {
+                if (opponentNameText != null)
+                {
+                    opponentNameText.text = $"Opponent: {evt.OpponentUsername}";
+                    Debug.Log($"[UI] Opponent assigned: {evt.OpponentUsername}");
+                }
+            }
         }
 
         /// <summary>

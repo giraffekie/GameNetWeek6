@@ -33,6 +33,12 @@ namespace GNW2.Events
     {
         public PlayerRef Player;
     }
+    
+    public struct OpponentAssignedEvent : IGameEvent
+    {
+        public PlayerRef Player;
+        public string OpponentUsername;
+    }
 
     public struct PlayerMadeSelectionEvent : IGameEvent
     {

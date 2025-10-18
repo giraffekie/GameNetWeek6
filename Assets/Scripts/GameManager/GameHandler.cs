@@ -3,6 +3,7 @@ using Fusion;
 using GNW2.GameManager;
 using GNW2.Events;
 using System.Collections.Generic;
+using System.Linq;
 
 public class GameHandler : NetworkBehaviour
 {
@@ -64,7 +65,12 @@ public class GameHandler : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_SendUserInfo(NetworkString<_16> username, RpcInfo info = default)
     {
-        PlayerRef player = info.Source;
+        var player = info.Source;
+        if (!player.IsRealPlayer)
+        {
+            player = Runner.LocalPlayer;
+            Debug.LogWarning($"[GameHandler] info.Source invalid, fallback to LocalPlayer: {player.PlayerId}");
+        }
 
         if (!_playerUsernames.ContainsKey(player))
         {
@@ -73,37 +79,43 @@ public class GameHandler : NetworkBehaviour
 
             // Broadcast join to all
             RPC_BroadcastPlayerJoined(player, username);
-
-            // Now sync the full list of usernames to everyone
-            var players = new List<PlayerRef>(_playerUsernames.Keys).ToArray();
-            var usernames = new List<NetworkString<_16>>(_playerUsernames.Values).ToArray();
-            RPC_SyncAllUsernames(players, usernames);
         }
     }
-
     
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
-    private void RPC_SyncAllUsernames(PlayerRef[] players, NetworkString<_16>[] usernames)
+    public void RPC_AssignOpponents(PlayerRef[] players, NetworkString<_16>[] opponentNames)
     {
-        _playerUsernames.Clear();
-
-        int len = Mathf.Min(players.Length, usernames.Length);
-        for (int i = 0; i < len; i++)
+        // Publish per-player opponent assignment
+        for (int i = 0; i < players.Length; i++)
         {
-            _playerUsernames[players[i]] = usernames[i];
-        }
-
-        Debug.Log($"[GameHandler] Synced {_playerUsernames.Count} usernames to all clients.");
-        
-        // Extra debug per client
-        if (Runner != null && Runner.LocalPlayer.IsRealPlayer)
-        {
-            Debug.Log($"[Client {Runner.LocalPlayer.PlayerId}] Received username sync:");
-            foreach (var entry in _playerUsernames)
+            EventBus.Publish(new OpponentAssignedEvent
             {
-                Debug.Log($"   Player {entry.Key.PlayerId}: {entry.Value}");
-            }
+                Player = players[i],
+                OpponentUsername = opponentNames[i].ToString()
+            });
+
+            Debug.Log($"[GameHandler] Player {players[i].PlayerId} opponent: {opponentNames[i]}");
         }
+    }
+    
+    public bool AllUsernamesAssigned()
+    {
+        int connectedPlayers = Runner.ActivePlayers.Count();
+        int assignedUsernames = _playerUsernames.Count;
+
+        Debug.Log($"[GameHandler] Username check: {assignedUsernames}/{connectedPlayers}");
+        return assignedUsernames >= connectedPlayers && assignedUsernames > 0;
+    }
+    
+    public string GetUsername(PlayerRef player)
+    {
+        if (_playerUsernames.TryGetValue(player, out NetworkString<_16> username))
+        {
+            return username.ToString();
+        }
+    
+        Debug.LogWarning($"[GameHandler] Username not found for player {player.PlayerId}");
+        return $"Player {player.PlayerId}";
     }
     
     
