@@ -119,8 +119,29 @@ namespace GNW2.GameManager
 
                 Debug.Log($"[GameManager] Player {player.PlayerId} joined. Total players: {_spawnedPlayers.Count}");
             }
+
+            // Both host and client send their username to server
+            if (runner.LocalPlayer == player && _input != null && !string.IsNullOrEmpty(_input.text))
+            {
+                // Use coroutine to wait for GameHandler to be ready
+                StartCoroutine(SendUsernameWhenReady(_input.text));
+            }
         }
 
+        private System.Collections.IEnumerator SendUsernameWhenReady(string username)
+        {
+            // Wait until GameHandler instance is available
+            while (GameHandler.Instance == null)
+            {
+                yield return new WaitForSeconds(0.1f);
+            }
+    
+            // Small additional delay to ensure everything is initialized
+            yield return new WaitForSeconds(0.2f);
+    
+            GameHandler.Instance.RPC_SendUserInfo(username);
+            Debug.Log($"[GameManager] Sent username for player: {username}");
+        }
         /// <summary>
         /// Called when a player leaves the session
         /// Despawns their player object and publishes PlayerLeftEvent

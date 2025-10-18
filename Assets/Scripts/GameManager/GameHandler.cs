@@ -10,13 +10,21 @@ public class GameHandler : NetworkBehaviour
 
     private GameStateMachine _stateMachine;
     private List<PlayerTurn> playerTurn = new();
+    
+    private Dictionary<PlayerRef, NetworkString<_16>> _playerUsernames = new Dictionary<PlayerRef, NetworkString<_16>>();
 
     struct PlayerTurn
     {
         public PlayerRef player;
         public int PlayerSelection;
     }
-
+    
+    [System.Serializable]
+    public struct PlayerInfo
+    {
+        public PlayerRef playerRef;
+        public NetworkString<_16> username;
+    }
 
     public override void Spawned()
     {
@@ -50,6 +58,32 @@ public class GameHandler : NetworkBehaviour
     {
         base.FixedUpdateNetwork();
         // State machine handles game flow now
+    }
+    
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_SendUserInfo(NetworkString<_16> username, RpcInfo info = default)
+    {
+        PlayerRef player = info.Source;
+    
+        if (!_playerUsernames.ContainsKey(player))
+        {
+            _playerUsernames.Add(player, username);
+            Debug.Log($"[GameHandler] Player {player.PlayerId} set username: {username}");
+        
+            // Broadcast to all clients
+            RPC_BroadcastPlayerJoined(player, username);
+        }
+    }
+    
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void RPC_BroadcastPlayerJoined(PlayerRef player, NetworkString<_16> username)
+    {
+        EventBus.Publish(new PlayerJoinedEvent
+        {
+            Player = player,
+            PlayerObject = null, // This will be set by GameManager
+            Username = username.ToString()
+        });
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]

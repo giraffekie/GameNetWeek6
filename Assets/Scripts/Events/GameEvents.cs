@@ -26,6 +26,7 @@ namespace GNW2.Events
     {
         public PlayerRef Player;
         public NetworkObject PlayerObject;
+        public string Username;
     }
 
     public struct PlayerLeftEvent : IGameEvent
