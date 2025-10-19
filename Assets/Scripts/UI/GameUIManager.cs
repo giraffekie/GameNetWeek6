@@ -96,11 +96,14 @@ namespace GNW2.UI
             {
                 if (opponentNameText != null)
                 {
-                    opponentNameText.text = $"Opponent: {evt.OpponentUsername}";
+                    opponentNameText.text = $"VERSUS {evt.OpponentUsername}";
+                    ShowOpponentNameDisplay();
                     Debug.Log($"[UI] Opponent assigned: {evt.OpponentUsername}");
                 }
             }
         }
+        
+        
 
         /// <summary>
         /// Called when connected to network - enables game UI
@@ -138,6 +141,13 @@ namespace GNW2.UI
             if (selectionUI != null)
             {
                 selectionUI.SetActive(true);
+        
+                // Hide opponent name when selection UI appears
+                if (opponentNameText != null)
+                {
+                    opponentNameText.gameObject.SetActive(false);
+                }
+        
                 Debug.Log("[UI] Showing selection UI for local player");
             }
         }
@@ -282,6 +292,38 @@ namespace GNW2.UI
             if (loseUI != null) loseUI.SetActive(false);
             if (drawUI != null) drawUI.SetActive(false);
         }
+        
+        /// <summary>
+        /// Shows opponent name display before selection UI
+        /// </summary>
+        private void ShowOpponentNameDisplay()
+        {
+            if (opponentNameText != null)
+            {
+                // Make sure the opponent name is visible and emphasized
+                opponentNameText.gameObject.SetActive(true);
+        
+                // You could add some visual emphasis here like scaling or color change
+                var originalScale = opponentNameText.transform.localScale;
+                opponentNameText.transform.localScale = originalScale * 1.2f; // Slight scale up
+        
+                // Return to normal scale after a moment
+                Invoke(nameof(ResetOpponentNameScale), 1.5f);
+        
+                Debug.Log("[UI] Displaying opponent name before selection");
+            }
+        }
+
+        /// <summary>
+        /// Reset opponent name scale to normal
+        /// </summary>
+        private void ResetOpponentNameScale()
+        {
+            if (opponentNameText != null)
+            {
+                opponentNameText.transform.localScale = Vector3.one;
+            }
+        }
 
         /// <summary>
         /// Hides all game UI elements (used when not connected to network)
@@ -299,6 +341,7 @@ namespace GNW2.UI
                 if (selectionUI != null) selectionUI.SetActive(false);
                 HideAllResultUIs();
                 if (roundNumberText != null) roundNumberText.gameObject.SetActive(false);
+                if (opponentNameText != null) opponentNameText.gameObject.SetActive(false);
                 if (playerCountText != null) playerCountText.gameObject.SetActive(false);
             }
         }

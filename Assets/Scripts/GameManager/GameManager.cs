@@ -33,6 +33,7 @@ namespace GNW2.GameManager
 
         // Dictionary tracking all active players in the session
         private Dictionary<PlayerRef, NetworkObject> _spawnedPlayers = new Dictionary<PlayerRef, NetworkObject>();
+        private Dictionary<PlayerRef, string> _playerUsernames = new Dictionary<PlayerRef, string>();
 
         // Input tracking
         private bool _isMouseButton0Pressed;
@@ -104,15 +105,20 @@ namespace GNW2.GameManager
 
                 // Track spawned player
                 _spawnedPlayers.Add(player, playerNetworkObject);
+                
+                // Get username for this player (current user for now, but you'll need to send it via RPC)
+                string username = PlayerPrefs.GetString("CURRENT_USER", $"Player_{player.PlayerId}");
+                _playerUsernames[player] = username;
 
                 // Publish event for other systems to react
                 EventBus.Publish(new PlayerJoinedEvent
                 {
                     Player = player,
-                    PlayerObject = playerNetworkObject
+                    PlayerObject = playerNetworkObject,
+                    Username = username
                 });
 
-                Debug.Log($"[GameManager] Player {player.PlayerId} joined. Total players: {_spawnedPlayers.Count}");
+                Debug.Log($"[GameManager] Player {player.PlayerId} ({username}) joined. Total players: {_spawnedPlayers.Count}");
             }
         }
 
@@ -256,6 +262,14 @@ namespace GNW2.GameManager
             // Publish connection event
             bool isHost = mode == GameMode.Host || mode == GameMode.Server;
             EventBus.Publish(new NetworkConnectedEvent { IsHost = isHost });
+        }
+        
+        /// <summary>
+        /// Get username for a PlayerRef
+        /// </summary>
+        public bool GetPlayerUsername(PlayerRef player, out string username)
+        {
+            return _playerUsernames.TryGetValue(player, out username);
         }
 
         /// <summary>

@@ -22,6 +22,8 @@ namespace GameManager
             {
                 Destroy(gameObject);
             }
+            
+            //ClearAllUsers();
         }
 
         [Header("Login UI References")]
@@ -348,23 +350,6 @@ namespace GameManager
             return HashPassword(inputPassword) == storedPassword;
         }
 
-        public bool IsUserLoggedIn()
-        {
-            return !string.IsNullOrEmpty(PlayerPrefs.GetString("CURRENT_USER", ""));
-        }
-
-        public string GetCurrentUser()
-        {
-            return PlayerPrefs.GetString("CURRENT_USER", "");
-        }
-
-        public void Logout()
-        {
-            PlayerPrefs.DeleteKey("CURRENT_USER");
-            PlayerPrefs.DeleteKey("CURRENT_USER_ID");
-            PlayerPrefs.Save();
-            ShowLoginPanel();
-        }
         #endregion
 
         #region UI Methods
@@ -410,6 +395,65 @@ namespace GameManager
             registerEmailInput.text = "";
             registerPasswordInput.text = "";
             registerRepeatPasswordInput.text = "";
+        }
+        #endregion
+        
+        #region Admin Methods
+        /// <summary>
+        /// Clears all user data from PlayerPrefs (for testing/reset purposes)
+        /// </summary>
+        public void ClearAllUsers()
+        {
+            try
+            {
+                int userCount = PlayerPrefs.GetInt(USERS_COUNT_KEY, 0);
+        
+                // Clear all user data
+                for (int i = 1; i <= userCount; i++)
+                {
+                    PlayerPrefs.DeleteKey($"{USERNAME_KEY_PREFIX}{i}");
+                    PlayerPrefs.DeleteKey($"{EMAIL_KEY_PREFIX}{i}");
+                    PlayerPrefs.DeleteKey($"{PASSWORD_KEY_PREFIX}{i}");
+                }
+        
+                // Clear lists and counters
+                PlayerPrefs.DeleteKey(USERS_COUNT_KEY);
+                PlayerPrefs.DeleteKey(USERNAME_LIST_KEY);
+                PlayerPrefs.DeleteKey(EMAIL_LIST_KEY);
+                PlayerPrefs.DeleteKey("CURRENT_USER");
+                PlayerPrefs.DeleteKey("CURRENT_USER_ID");
+        
+                // Also clear all score data
+                string usernameList = PlayerPrefs.GetString("USERNAMES", "");
+                if (!string.IsNullOrEmpty(usernameList))
+                {
+                    string[] usernames = usernameList.Split(';');
+                    foreach (string username in usernames)
+                    {
+                        if (!string.IsNullOrEmpty(username))
+                        {
+                            PlayerPrefs.DeleteKey($"SCORE_WINS_{username}");
+                            PlayerPrefs.DeleteKey($"SCORE_LOSSES_{username}");
+                            PlayerPrefs.DeleteKey($"SCORE_DRAWS_{username}");
+                        }
+                    }
+                }
+        
+                PlayerPrefs.Save();
+        
+                Debug.Log("[GameAuthManager] All user data and scores cleared successfully!");
+        
+                // Show confirmation
+                if (loginErrorText != null)
+                {
+                    SetLoginError("All users and scores cleared!", Color.yellow);
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[GameAuthManager] Error clearing users: {e.Message}");
+                SetLoginError("Error clearing users!", Color.red);
+            }
         }
         #endregion
     }

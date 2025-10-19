@@ -28,6 +28,11 @@ namespace GNW2.GameManager
         // Track scores for all players
         private Dictionary<PlayerRef, PlayerScore> _playerScores = new Dictionary<PlayerRef, PlayerScore>();
 
+        // PlayerPrefs keys for score storage
+        private const string SCORE_WINS_KEY_PREFIX = "SCORE_WINS_";
+        private const string SCORE_LOSSES_KEY_PREFIX = "SCORE_LOSSES_";
+        private const string SCORE_DRAWS_KEY_PREFIX = "SCORE_DRAWS_";
+
         private void OnEnable()
         {
             // Subscribe to relevant events
@@ -45,25 +50,31 @@ namespace GNW2.GameManager
         }
 
         /// <summary>
-        /// Initialize score tracking for new players
+        /// Initialize score tracking for new players and load their saved scores
         /// </summary>
         private void OnPlayerJoined(PlayerJoinedEvent evt)
         {
             if (!_playerScores.ContainsKey(evt.Player))
             {
-                _playerScores[evt.Player] = new PlayerScore();
-                Debug.Log($"[ScoreManager] Tracking started for Player {evt.Player.PlayerId}");
+                // Try to load saved scores for this player, or create new if none exist
+                _playerScores[evt.Player] = LoadPlayerScore(evt.Player);
+                Debug.Log($"[ScoreManager] Tracking started for Player {evt.Player.PlayerId}. " +
+                         $"W:{_playerScores[evt.Player].Wins} L:{_playerScores[evt.Player].Losses} D:{_playerScores[evt.Player].Draws}");
+                
+                // Reset For Showcase
+                ResetAllScores();
             }
         }
 
         /// <summary>
-        /// Clean up score tracking for disconnected players
+        /// Clean up score tracking for disconnected players and save their scores
         /// </summary>
         private void OnPlayerLeft(PlayerLeftEvent evt)
         {
             if (_playerScores.ContainsKey(evt.Player))
             {
                 var score = _playerScores[evt.Player];
+                SavePlayerScore(evt.Player, score);
                 Debug.Log($"[ScoreManager] Player {evt.Player.PlayerId} final stats - " +
                          $"W:{score.Wins} L:{score.Losses} D:{score.Draws}");
                 _playerScores.Remove(evt.Player);
@@ -71,8 +82,7 @@ namespace GNW2.GameManager
         }
 
         /// <summary>
-        /// Update scores when a round ends
-        /// Publishes ScoreUpdatedEvent for UI to display
+        /// Update scores when a round ends and save immediately
         /// </summary>
         private void OnRoundEnded(RoundEndedEvent evt)
         {
@@ -82,6 +92,7 @@ namespace GNW2.GameManager
                 foreach (var kvp in _playerScores)
                 {
                     kvp.Value.Draws++;
+                    SavePlayerScore(kvp.Key, kvp.Value);
                     PublishScoreUpdate(kvp.Key, kvp.Value);
                 }
                 Debug.Log("[ScoreManager] Round ended in draw");
@@ -92,6 +103,7 @@ namespace GNW2.GameManager
                 if (_playerScores.ContainsKey(evt.Winner))
                 {
                     _playerScores[evt.Winner].Wins++;
+                    SavePlayerScore(evt.Winner, _playerScores[evt.Winner]);
                     PublishScoreUpdate(evt.Winner, _playerScores[evt.Winner]);
                     Debug.Log($"[ScoreManager] Player {evt.Winner.PlayerId} wins!");
                 }
@@ -102,10 +114,65 @@ namespace GNW2.GameManager
                     if (kvp.Key != evt.Winner)
                     {
                         kvp.Value.Losses++;
+                        SavePlayerScore(kvp.Key, kvp.Value);
                         PublishScoreUpdate(kvp.Key, kvp.Value);
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Save player score to PlayerPrefs using their username as identifier
+        /// </summary>
+        private void SavePlayerScore(PlayerRef player, PlayerScore score)
+        {
+            string username = GetUsernameForPlayer(player);
+            if (!string.IsNullOrEmpty(username))
+            {
+                PlayerPrefs.SetInt($"{SCORE_WINS_KEY_PREFIX}{username}", score.Wins);
+                PlayerPrefs.SetInt($"{SCORE_LOSSES_KEY_PREFIX}{username}", score.Losses);
+                PlayerPrefs.SetInt($"{SCORE_DRAWS_KEY_PREFIX}{username}", score.Draws);
+                PlayerPrefs.Save();
+                
+                Debug.Log($"[ScoreManager] Saved scores for {username}: W:{score.Wins} L:{score.Losses} D:{score.Draws}");
+            }
+        }
+
+        /// <summary>
+        /// Load player score from PlayerPrefs using their username as identifier
+        /// </summary>
+        private PlayerScore LoadPlayerScore(PlayerRef player)
+        {
+            string username = GetUsernameForPlayer(player);
+            if (!string.IsNullOrEmpty(username))
+            {
+                return new PlayerScore
+                {
+                    Wins = PlayerPrefs.GetInt($"{SCORE_WINS_KEY_PREFIX}{username}", 0),
+                    Losses = PlayerPrefs.GetInt($"{SCORE_LOSSES_KEY_PREFIX}{username}", 0),
+                    Draws = PlayerPrefs.GetInt($"{SCORE_DRAWS_KEY_PREFIX}{username}", 0)
+                };
+            }
+            
+            // Return new score if no saved data found
+            return new PlayerScore();
+        }
+
+        /// <summary>
+        /// Get the username for a PlayerRef by checking the username mappings
+        /// </summary>
+        private string GetUsernameForPlayer(PlayerRef player)
+        {
+            // Try to get from GameManager's username mappings
+            var gameManager = FindFirstObjectByType<GameManager>();
+            if (gameManager != null && gameManager.GetPlayerUsername(player, out string username))
+            {
+                return username;
+            }
+
+            // Fallback: use player ID if no username is available
+            Debug.LogWarning($"[ScoreManager] No username found for Player {player.PlayerId}, using player ID as fallback");
+            return $"Player_{player.PlayerId}";
         }
 
         /// <summary>
@@ -143,14 +210,77 @@ namespace GNW2.GameManager
         /// </summary>
         public void ResetAllScores()
         {
+            // Reset scores for currently connected players
             foreach (var kvp in _playerScores)
             {
                 kvp.Value.Wins = 0;
                 kvp.Value.Losses = 0;
                 kvp.Value.Draws = 0;
+                SavePlayerScore(kvp.Key, kvp.Value);
                 PublishScoreUpdate(kvp.Key, kvp.Value);
             }
-            Debug.Log("[ScoreManager] All scores reset");
+    
+            // Reset scores for all registered users in PlayerPrefs
+            List<string> allUsers = GetAllUsersWithScores();
+            foreach (string username in allUsers)
+            {
+                PlayerPrefs.SetInt($"{SCORE_WINS_KEY_PREFIX}{username}", 0);
+                PlayerPrefs.SetInt($"{SCORE_LOSSES_KEY_PREFIX}{username}", 0);
+                PlayerPrefs.SetInt($"{SCORE_DRAWS_KEY_PREFIX}{username}", 0);
+            }
+    
+            PlayerPrefs.Save();
+            Debug.Log("[ScoreManager] All scores reset for all users");
+        }
+
+        /// <summary>
+        /// Get score for a specific username (useful for displaying leaderboards)
+        /// </summary>
+        public PlayerScore GetScoreByUsername(string username)
+        {
+            if (string.IsNullOrEmpty(username))
+                return null;
+
+            return new PlayerScore
+            {
+                Wins = PlayerPrefs.GetInt($"{SCORE_WINS_KEY_PREFIX}{username}", 0),
+                Losses = PlayerPrefs.GetInt($"{SCORE_LOSSES_KEY_PREFIX}{username}", 0),
+                Draws = PlayerPrefs.GetInt($"{SCORE_DRAWS_KEY_PREFIX}{username}", 0)
+            };
+        }
+
+        /// <summary>
+        /// Get all usernames that have score data
+        /// </summary>
+        public List<string> GetAllUsersWithScores()
+        {
+            List<string> usersWithScores = new List<string>();
+            
+            // Get all registered users from GameAuthManager
+            string usernameList = PlayerPrefs.GetString("USERNAMES", "");
+            if (!string.IsNullOrEmpty(usernameList))
+            {
+                string[] usernames = usernameList.Split(';');
+                foreach (string username in usernames)
+                {
+                    if (!string.IsNullOrEmpty(username) && HasScoreData(username))
+                    {
+                        usersWithScores.Add(username);
+                    }
+                }
+            }
+            
+            return usersWithScores;
+        }
+
+        /// <summary>
+        /// Check if a username has any score data saved
+        /// </summary>
+        private bool HasScoreData(string username)
+        {
+            return PlayerPrefs.HasKey($"{SCORE_WINS_KEY_PREFIX}{username}") ||
+                   PlayerPrefs.HasKey($"{SCORE_LOSSES_KEY_PREFIX}{username}") ||
+                   PlayerPrefs.HasKey($"{SCORE_DRAWS_KEY_PREFIX}{username}");
         }
     }
 }

@@ -178,39 +178,70 @@ namespace GNW2.GameManager
     // ===== State Implementations =====
 
     public class WaitingForPlayersState : IGameState
+{
+    private GameStateMachine _fsm;
+    private float _stateTime;
+    private const float OPPONENT_DISPLAY_TIME = 2f; // Show opponent name for 2 seconds
+    private bool _hasAssignedOpponents;
+
+    public WaitingForPlayersState(GameStateMachine fsm)
     {
-        private GameStateMachine _fsm;
+        _fsm = fsm;
+    }
 
-        public WaitingForPlayersState(GameStateMachine fsm)
-        {
-            _fsm = fsm;
-        }
+    public void Enter()
+    {
+        Debug.Log("Waiting for players...");
+        _stateTime = 0f;
+        _hasAssignedOpponents = false;
+    }
 
-        public void Enter()
+    public void Update()
+    {
+        var _gameHandler = GameHandler.Instance;
+        
+        if (GameManager.Instance.activePlayers.Count >= 2 && _gameHandler != null && _gameHandler.AllUsernamesAssigned())
         {
-            Debug.Log("Waiting for players...");
-        }
-
-        public void Update()
-        {
-            var _gameHandler = GameHandler.Instance;
-            
-            if (GameManager.Instance.activePlayers.Count >= 2 && _gameHandler != null && _gameHandler.AllUsernamesAssigned())
+            if (!_hasAssignedOpponents)
             {
-                // Publish game started event
+                // Assign opponents and publish game started event
                 EventBus.Publish(new GameStartedEvent
                 {
                     PlayerCount = GameManager.Instance.activePlayers.Count
                 });
 
+                // Assign opponents
+                var activePlayers = GameManager.Instance.activePlayers;
+                var playerList = new List<PlayerRef>(activePlayers.Keys);
+                var player1 = playerList[0];
+                var player2 = playerList[1];
+
+                // Get usernames
+                string name1 = GameHandler.Instance.GetUsername(player1);
+                string name2 = GameHandler.Instance.GetUsername(player2);
+
+                // Create arrays for RPC
+                PlayerRef[] players = { player1, player2 };
+                NetworkString<_16>[] opponentNames = { name2, name1 };
+
+                GameHandler.Instance.RPC_AssignOpponents(players, opponentNames);
+                _hasAssignedOpponents = true;
+                _stateTime = 0f; // Reset timer when we first assign opponents
+            }
+
+            // Wait for opponent name to be displayed before starting the round
+            _stateTime += _fsm.Runner.DeltaTime;
+            if (_stateTime >= OPPONENT_DISPLAY_TIME)
+            {
                 _fsm.TransitionToState(GameState.RoundStarting);
             }
         }
-
-        public void Exit()
-        {
-        }
     }
+
+    public void Exit()
+    {
+    }
+}
 
     public class RoundStartingState : IGameState
     {
@@ -225,29 +256,9 @@ namespace GNW2.GameManager
         {
             _fsm.CurrentRound++;
             Debug.Log($"Round {_fsm.CurrentRound} starting!");
-
             EventBus.Publish(new RoundStartedEvent { RoundNumber = _fsm.CurrentRound });
 
-            // Assign opponents only if 2 players are active
-            var activePlayers = GameManager.Instance.activePlayers;
-            if (activePlayers.Count == 2 && GameHandler.Instance != null)
-            {
-                var playerList = new List<PlayerRef>(activePlayers.Keys);
-                var player1 = playerList[0];
-                var player2 = playerList[1];
-
-                // Get usernames
-                string name1 = GameHandler.Instance.GetUsername(player1);
-                string name2 = GameHandler.Instance.GetUsername(player2);
-
-                // Create arrays for RPC
-                PlayerRef[] players = { player1, player2 };
-                NetworkString<_16>[] opponentNames = { name2, name1 };
-
-                GameHandler.Instance.RPC_AssignOpponents(players, opponentNames);
-            }
-
-            // Continue to selection phase
+            // Immediately transition to waiting for selections
             _fsm.TransitionToState(GameState.WaitingForSelections);
         }
 
